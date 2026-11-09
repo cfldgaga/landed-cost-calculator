@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>北美到岸成本计算器</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px 16px; background: #fff7ed; color: #431407; font-size: 16px; font-family: system-ui, sans-serif; line-height: 1.6; }
+    main { max-width: 800px; margin: auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .brand { padding: 28px 24px; margin-bottom: 24px; border-radius: 12px; background: linear-gradient(120deg, #f97316, #dc2626); color: white; }
+    .brand p { margin: 0; }
+    .intro { margin: 0 0 24px; color: #785747; }
+    .panel { padding: 24px; margin-bottom: 24px; background: white; border: 1px solid #fed7aa; border-radius: 12px; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    label { display: block; font-weight: 600; }
+    input, textarea { display: block; width: 100%; margin-top: 8px; padding: 10px 12px; border: 1px solid #c9a58d; border-radius: 6px; font: inherit; }
+    input:focus, textarea:focus, button:focus-visible { outline: 3px solid #fed7aa; border-color: #ea580c; }
+    h2 { margin: 0 0 16px; font-size: 20px; }
+    dl { margin: 0; }
+    .result { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-bottom: 1px solid #ffedd5; }
+    .result:last-child { border: 0; color: #c2410c; font-size: 20px; font-weight: 700; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .notes { color: #785747; font-size: 14px; }
+    .notes p { margin: 8px 0; }
+    textarea { resize: vertical; }
+    .full-width { grid-column: 1 / -1; }
+    button { width: 100%; padding: 14px 20px; border: 0; border-radius: 8px; background: linear-gradient(120deg, #f97316, #dc2626); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled { background: #a8a29e; cursor: wait; }
+    #submit-status { overflow-wrap: anywhere; }
+    footer { margin-top: 32px; color: #785747; font-size: 14px; text-align: center; }
+    @media (max-width: 540px) { .fields { grid-template-columns: 1fr; } .panel { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="brand">
+      <h1>北美到岸成本计算器</h1>
+      <p>J&G Prime Business Solutions · 王博士讲出海</p>
+    </header>
+    <p class="intro">填写采购与物流费用，即时估算总成本和每件到岸成本。所有金额单位均为美元。</p>
+    <section class="panel" aria-labelledby="inputs-title">
+      <h2 id="inputs-title">费用输入</h2>
+      <div class="fields">
+        <label for="unit-price">产品单价（美元）<input id="unit-price" type="number" min="0" step="any" placeholder="0.00"></label>
+        <label for="quantity">数量（件）<input id="quantity" type="number" min="0" step="1" placeholder="0"></label>
+        <label for="shipping">国际运费（美元）<input id="shipping" type="number" min="0" step="any" placeholder="0.00"></label>
+        <label for="insurance">保险费（美元）<input id="insurance" type="number" min="0" step="any" placeholder="0.00"></label>
+        <label for="tariff-rate">关税率（%）<input id="tariff-rate" type="number" min="0" step="any" placeholder="0"></label>
+        <label for="clearance">清关杂费（美元）<input id="clearance" type="number" min="0" step="any" placeholder="0.00"></label>
+        <label for="local-shipping">美国本地运费（美元）<input id="local-shipping" type="number" min="0" step="any" placeholder="0.00"></label>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="results-title">
+      <h2 id="results-title">计算结果（美元）</h2>
+      <dl aria-live="polite" aria-atomic="true">
+        <div class="result"><dt>货物总价</dt><dd id="goods-total">0.00</dd></div>
+        <div class="result"><dt>总成本</dt><dd id="total-cost">0.00</dd></div>
+        <div class="result"><dt>每件到岸成本</dt><dd id="unit-cost">0.00</dd></div>
+      </dl>
+      <p id="error" role="alert" hidden>请输入有效的非负数，数量须为整数；数值过大时请减小输入。</p>
+    </section>
+    <section class="panel" aria-labelledby="review-title">
+      <h2 id="review-title">让王博士帮我看看这个测算</h2>
+      <form id="review-form" novalidate>
+        <div class="fields">
+          <label for="company">公司名称（必填）<input id="company" name="company" required autocomplete="organization"></label>
+          <label for="contact">联系人（选填）<input id="contact" name="contact" autocomplete="name"></label>
+          <label for="contact-info" class="full-width">联系方式（必填，邮箱或微信号）<input id="contact-info" name="contactInfo" required></label>
+          <label for="note" class="full-width">备注（选填）<textarea id="note" name="note" rows="3"></textarea></label>
+        </div>
+        <p class="notes">提交后，你的测算数据和联系方式会发送给 J&G Prime，王博士会给你一份简短点评。我们只用这些信息与你联系，不作其他用途。</p>
+        <button id="submit-review" type="submit">提交给王博士点评</button>
+        <p id="submit-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section class="notes" aria-labelledby="formula-title">
+      <h2 id="formula-title">计算说明</h2>
+      <p>货物总价 = 产品单价 × 数量；关税 = 货物总价 × 关税率 ÷ 100。</p>
+      <p>总成本 = 货物总价 + 国际运费 + 保险费 + 关税 + 清关杂费 + 美国本地运费。</p>
+      <p>每件到岸成本 = 总成本 ÷ 数量。输入为空时按 0 处理；数量为 0 时，每件到岸成本显示为 0.00。计算保留中间精度，最终金额四舍五入显示两位小数。</p>
+    </section>
+    <footer>© J&G Prime Business Solutions Inc · 关注微信公众号『王博士讲出海』获取更多出海实操内容</footer>
+  </main>
+  <script>
+    const inputs = Array.from(document.querySelectorAll('[aria-labelledby="inputs-title"] input'));
+    const outputs = ['goods-total', 'total-cost', 'unit-cost'].map(id => document.getElementById(id));
+
+    function calculate() {
+      const values = inputs.map(input => input.value === '' ? 0 : Number(input.value));
+      const [price, quantity, shipping, insurance, rate, clearance, localShipping] = values;
+      const goods = price * quantity;
+      const total = goods + shipping + insurance + goods * (rate / 100) + clearance + localShipping;
+      const results = [goods, total, quantity > 0 ? total / quantity : 0];
+      const valid = inputs.every(input => input.validity.valid) &&
+        values.every(value => Number.isFinite(value) && value >= 0) &&
+        Number.isInteger(quantity) && results.every(Number.isFinite);
+
+      document.getElementById('error').hidden = valid;
+      outputs.forEach((output, index) => {
+        output.textContent = valid ? results[index].toFixed(2) : '—';
+      });
+    }
+
+    inputs.forEach(input => input.addEventListener('input', calculate));
+    calculate();
+
+    document.getElementById('review-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = document.getElementById('submit-review');
+      const status = document.getElementById('submit-status');
+      if (button.disabled) return;
+      const company = document.getElementById('company').value.trim();
+      const contactInfo = document.getElementById('contact-info').value.trim();
+      if (!company || !contactInfo) {
+        status.textContent = '请填写公司名称和联系方式后再提交。';
+        document.getElementById(!company ? 'company' : 'contact-info').focus();
+        return;
+      }
+      calculate();
+      if (!document.getElementById('error').hidden) {
+        status.textContent = '请先修正费用输入中的无效数值后再提交。';
+        return;
+      }
+      const [price, quantity, shipping, insurance, rate, clearance, localShipping] =
+        inputs.map(input => input.value === '' ? 0 : Number(input.value));
+      const [goodsTotal, totalCost, unitCost] = outputs.map(output => Number(output.textContent));
+      const payload = {
+        company,
+        contact: document.getElementById('contact').value.trim(),
+        contactInfo,
+        price, quantity, shipping, insurance, rate, clearance, localShipping,
+        goodsTotal, totalCost, unitCost,
+        note: document.getElementById('note').value.trim(),
+        source: 'landed-cost-calculator'
+      };
+      button.disabled = true;
+      status.textContent = '正在提交，请稍候…';
+      try {
+        await fetch('https://script.google.com/macros/s/AKfycbxLXrP3KW_cDwXdxzqli-IwtJZkzlXD_g1stkeNpyuMDrc-7clMH_nnSEOqpRzyipq5/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload),
+          mode: 'no-cors'
+        });
+        status.textContent = '已收到！王博士会尽快给你点评，请留意你的邮箱或微信。';
+      } catch (error) {
+        status.textContent = '提交失败，请检查网络连接后重试。';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
