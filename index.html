@@ -30,6 +30,29 @@
     button:disabled { background: #a8a29e; cursor: wait; }
     #submit-status { overflow-wrap: anywhere; }
     footer { margin-top: 32px; color: #785747; font-size: 14px; text-align: center; }
+    #generate-summary { margin-top: 20px; }
+    #summary-view { max-width: 800px; margin: auto; }
+    #summary-view .brand { padding: 20px 24px; }
+    .summary-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    .summary-actions button { flex: 1; min-width: 160px; }
+    .summary-parameters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+    .summary-parameters dt { color: #785747; }
+    .summary-parameters dd { font-weight: 600; }
+    .summary-conclusion { padding: 16px; border-left: 4px solid #ea580c; background: #fff7ed; overflow-wrap: anywhere; }
+    @page { size: A4 portrait; margin: 15mm; }
+    @media print {
+      body { padding: 0; background: white; color: #431407; font-size: 11pt; }
+      body.summary-open > :not(#summary-view) { display: none !important; }
+      #summary-view { width: 100%; max-width: none; }
+      .summary-actions { display: none !important; }
+      #summary-view .brand { background: white; color: #9a3412; border-bottom: 2px solid #ea580c; border-radius: 0; padding: 0 0 12px; margin-bottom: 16px; }
+      #summary-view .panel { padding: 16px; margin-bottom: 16px; break-inside: avoid; }
+      #summary-view h1 { font-size: 22pt; }
+      #summary-view h2 { font-size: 14pt; }
+      #summary-view .result:last-child { font-size: 15pt; }
+      #summary-view footer { margin-top: 16px; font-size: 10pt; }
+      .summary-parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 540px) { .fields { grid-template-columns: 1fr; } .panel { padding: 20px; } }
   </style>
 </head>
@@ -59,6 +82,7 @@
         <div class="result"><dt>总成本</dt><dd id="total-cost">0.00</dd></div>
         <div class="result"><dt>每件到岸成本</dt><dd id="unit-cost">0.00</dd></div>
       </dl>
+      <button id="generate-summary" type="button" hidden>生成测算摘要</button>
       <p id="error" role="alert" hidden>请输入有效的非负数，数量须为整数；数值过大时请减小输入。</p>
     </section>
     <section class="panel" aria-labelledby="review-title">
@@ -83,9 +107,37 @@
     </section>
     <footer>© J&G Prime Business Solutions Inc · 关注微信公众号『王博士讲出海』获取更多出海实操内容</footer>
   </main>
+  <section id="summary-view" aria-labelledby="summary-title" hidden>
+    <div class="summary-actions">
+      <button id="print-summary" type="button">打印 / 保存为 PDF</button>
+      <button id="close-summary" type="button">关闭 / 返回计算器</button>
+    </div>
+    <header class="brand">
+      <h1 id="summary-title" tabindex="-1">到岸成本测算摘要</h1>
+      <p>J&G Prime Business Solutions · 王博士讲出海</p>
+    </header>
+    <section class="panel" aria-labelledby="summary-inputs-title">
+      <h2 id="summary-inputs-title">测算参数</h2>
+      <p class="notes">所有金额单位均为美元（USD）。</p>
+      <dl id="summary-inputs" class="summary-parameters"></dl>
+    </section>
+    <section class="panel" aria-labelledby="summary-results-title">
+      <h2 id="summary-results-title">测算结果（美元）</h2>
+      <dl id="summary-results"></dl>
+      <p id="summary-conclusion" class="summary-conclusion"></p>
+      <p class="notes">本摘要为成本估算，实际费用以交易及物流账单为准。</p>
+    </section>
+    <footer>王博士提供免费测算复核：请返回主页面，点击「提交给王博士点评」自愿提交。</footer>
+  </section>
   <script>
     const inputs = Array.from(document.querySelectorAll('[aria-labelledby="inputs-title"] input'));
     const outputs = ['goods-total', 'total-cost', 'unit-cost'].map(id => document.getElementById(id));
+
+    const summaryButton = document.getElementById('generate-summary');
+    const summaryView = document.getElementById('summary-view');
+    const calculator = document.querySelector('main');
+    let hasCalculated = false;
+    let currentCalculation = null;
 
     function calculate() {
       const values = inputs.map(input => input.value === '' ? 0 : Number(input.value));
@@ -97,14 +149,65 @@
         values.every(value => Number.isFinite(value) && value >= 0) &&
         Number.isInteger(quantity) && results.every(Number.isFinite);
 
+      currentCalculation = valid ? { values, results } : null;
+      summaryButton.hidden = !hasCalculated || !valid;
       document.getElementById('error').hidden = valid;
       outputs.forEach((output, index) => {
         output.textContent = valid ? results[index].toFixed(2) : '—';
       });
     }
 
-    inputs.forEach(input => input.addEventListener('input', calculate));
+    inputs.forEach(input => input.addEventListener('input', () => {
+      hasCalculated = true;
+      calculate();
+    }));
     calculate();
+
+    function fillSummaryList(id, labels, values, resultRows = false) {
+      const list = document.getElementById(id);
+      list.replaceChildren(...labels.map((label, index) => {
+        const row = document.createElement('div');
+        if (resultRows) row.className = 'result';
+        const term = document.createElement('dt');
+        const value = document.createElement('dd');
+        term.textContent = label;
+        value.textContent = values[index];
+        row.append(term, value);
+        return row;
+      }));
+    }
+
+    summaryButton.addEventListener('click', () => {
+      calculate();
+      if (!hasCalculated || !currentCalculation) return;
+      const { values, results } = currentCalculation;
+      fillSummaryList('summary-inputs',
+        ['产品单价（美元）', '数量（件）', '国际运费（美元）', '保险费（美元）', '关税率（%）', '清关杂费（美元）', '美国本地运费（美元）'],
+        values.map(String));
+      fillSummaryList('summary-results', ['货物总价', '总成本', '每件到岸成本'],
+        results.map(value => value.toFixed(2)), true);
+      document.getElementById('summary-conclusion').textContent =
+        values[1] > 0
+          ? `本次采购 ${values[1]} 件，预计总到岸成本为 ${results[1].toFixed(2)} 美元，每件到岸成本为 ${results[2].toFixed(2)} 美元。`
+          : `本次数量为 0 件，预计总到岸成本为 ${results[1].toFixed(2)} 美元；按计算器规则，每件到岸成本显示为 0.00 美元。`;
+      calculator.hidden = true;
+      summaryView.hidden = false;
+      document.body.classList.add('summary-open');
+      document.getElementById('summary-title').focus();
+      window.scrollTo(0, 0);
+    });
+
+    document.getElementById('print-summary').addEventListener('click', () => window.print());
+    function closeSummary() {
+      summaryView.hidden = true;
+      calculator.hidden = false;
+      document.body.classList.remove('summary-open');
+      summaryButton.focus();
+    }
+    document.getElementById('close-summary').addEventListener('click', closeSummary);
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !summaryView.hidden) closeSummary();
+    });
 
     document.getElementById('review-form').addEventListener('submit', async event => {
       event.preventDefault();
